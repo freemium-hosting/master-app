@@ -9,4 +9,5 @@ import ru.freemiumhosting.master.model.Project;
 @Repository
 public interface ProjectRep extends JpaRepository<Project,Long> {
     Project findProjectById(Long id);
+    Boolean existsByNodePort(Integer nodePort);
 }

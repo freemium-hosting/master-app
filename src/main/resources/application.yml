@@ -34,7 +34,7 @@ management:
 spring:
   h2:
     console:
-      enabled: false #true
+      enabled: true
   mvc:
     static-path-pattern: /**
   datasource:

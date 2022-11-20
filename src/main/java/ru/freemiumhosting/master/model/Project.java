@@ -25,21 +25,13 @@ public class Project {
     private String language;
     private String lastLaunch = "true";
     private String currentLaunch = "true";
+    private String kubernetesName;
+    private Integer nodePort;
+
 
     @ManyToOne
     @JoinColumn(name = "user_id")
     private User user;
-
-    public Project(String name, String link, String status, String language) {
-        this.name = name;
-        this.link = link;
-        this.status = status;
-        this.language = language;
-    }
-
-    public Project(String link) {
-        this.link = link;
-    }
 
     public Boolean userStartsDeploy() {
         if (lastLaunch.equals("false") && currentLaunch.equals("true"))
@@ -54,4 +46,5 @@ public class Project {
         else
             return false;
     }
+
 }
