@@ -26,7 +26,7 @@ public class DockerImageBuilderService {
     @SneakyThrows
     public void pushImageToRegistry(Project project) {
         log.info("Старт загрузки образа в registry");
-        String destination = repository + "/" + project.getName().toLowerCase() + ":" + UUID.randomUUID();
+        String destination = repository + "/" + project.getName().toLowerCase() + ":" + project.getCommitHash();
         String kanikoDestination = registryUrl + "/" + destination;
         Path context = Path.of(pathToProjects, project.getName()).toAbsolutePath().normalize();
         String dockerPath = context.resolve("Dockerfile").normalize().toString();

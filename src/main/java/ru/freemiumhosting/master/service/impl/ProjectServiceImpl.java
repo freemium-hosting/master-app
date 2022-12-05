@@ -11,17 +11,19 @@ import java.util.stream.Collectors;
 
 import java.util.*;
 
-import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import ru.freemiumhosting.master.exception.DeployException;
 import ru.freemiumhosting.master.exception.KuberException;
 import ru.freemiumhosting.master.model.Project;
 import ru.freemiumhosting.master.model.ProjectStatus;
 import ru.freemiumhosting.master.repository.ProjectRep;
+import ru.freemiumhosting.master.service.DeployService;
 import ru.freemiumhosting.master.service.builderinfo.BuilderInfoService;
 import ru.freemiumhosting.master.service.ProjectService;
+import ru.freemiumhosting.master.service.CleanerService;
 
 @Slf4j
 @Service
@@ -34,6 +36,8 @@ public class ProjectServiceImpl implements ProjectService {
     // key - language, value - BuilderInfoService
     private final Map<String, BuilderInfoService> builderInfoServices;
     private final DockerImageBuilderService dockerImageBuilderService;
+    private final CleanerService cleanerService;
+    private final DeployService deployService;
     private final ProjectRep projectRep;
 
 
@@ -42,7 +46,7 @@ public class ProjectServiceImpl implements ProjectService {
                               KubernetesService kubernetesService, DockerfileBuilderService dockerfileBuilderService,
                               Collection<BuilderInfoService> builderInfoServices,
                               DockerImageBuilderService dockerImageBuilderService,
-                              ProjectRep projectRep) {
+                              CleanerService cleanerService, DeployService deployService, ProjectRep projectRep) {
         this.clonePath = clonePath;
         this.gitService = gitService;
         this.kubernetesService = kubernetesService;
@@ -50,19 +54,18 @@ public class ProjectServiceImpl implements ProjectService {
         this.dockerImageBuilderService = dockerImageBuilderService;
         this.builderInfoServices = builderInfoServices.stream().collect(Collectors.toMap(builderInfoService ->
                 builderInfoService.supportedLanguage().toLowerCase(Locale.ROOT), s -> s));
+        this.cleanerService = cleanerService;
+        this.deployService = deployService;
         this.projectRep = projectRep;
     }
 
     @Override
     public void createProject(Project project) throws DeployException {
-        deployProject(project);
-        projectRep.save(project);
-    }
-
-    @Override
-    public void deployProject(Project project) throws DeployException {
+        log.info(String.format("Старт создания проекта %s", project.getName()));
+        project.setStatus(ProjectStatus.CREATED);
         var projectPath = Path.of(clonePath, project.getName());
-        gitService.cloneGitRepo(projectPath.toString(), project.getLink(), project.getBranch());
+        String commitHash = gitService.cloneGitRepo(projectPath.toString(), project.getLink(), project.getBranch());
+        project.setCommitHash(commitHash);
         var executableFileName = builderInfoServices.get(project.getLanguage().toLowerCase(Locale.ROOT))
                 .validateProjectAndGetExecutableFileName(projectPath.toString());
         project.setExecutableName(executableFileName);
@@ -70,13 +73,16 @@ public class ProjectServiceImpl implements ProjectService {
             dockerfileBuilderService.createDockerFile(projectPath.resolve("Dockerfile"),
                     project.getLanguage().toLowerCase(Locale.ROOT), executableFileName, "");
         }
-        dockerImageBuilderService.pushImageToRegistry(project);
-        //TODO: delete tmp files
-        projectRep.save(project);//сначала сохраняем, чтобы id сгенерировалось
-        project.setKubernetesName("project" + project.getId());
-        generateProjectNodePort(project);
-        kubernetesService.createKubernetesObjects(project);
-        //TODO: clear dockerhub repository
+        projectRep.save(project);
+        log.info(String.format("Проект %s успешно создан", project.getName()));
+        deployService.deployProject(project);
+        project.setStatus(ProjectStatus.DEPLOY_IN_PROGRESS);
+        projectRep.save(project);
+    }
+
+    @Override
+    public void deployProject(Project project) throws DeployException {
+        deployService.deployProject(project);
     }
 
     @Override
@@ -117,14 +123,5 @@ public class ProjectServiceImpl implements ProjectService {
     @Override
     public Project findProjectById(Long projectId) {
         return projectRep.findProjectById(projectId);
-    }
-
-    public void generateProjectNodePort(Project project) {
-        Random random = new Random();
-        while (project.getNodePort() == null) {
-            Integer nodePort = 30000 + random.nextInt(2767);
-            if (!projectRep.existsByNodePort(nodePort))
-                project.setNodePort(nodePort);
-        }
     }
 }

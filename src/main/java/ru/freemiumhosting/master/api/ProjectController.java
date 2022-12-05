@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import ru.freemiumhosting.master.dto.ProjectDto;
 import ru.freemiumhosting.master.dto.ProjectMapper;
+import ru.freemiumhosting.master.exception.DeployException;
 import ru.freemiumhosting.master.model.Project;
 import ru.freemiumhosting.master.service.ProjectService;
 
@@ -41,6 +42,12 @@ public class ProjectController {
         }
         return errorMessage == null ? "redirect:/projects" : MessageFormat.format(
                 "redirect:/deploy/?errorMessage={1}", project.getId(), URLEncoder.encode(errorMessage));
+    }
+
+    @PostMapping("/api/deploy")
+    public String deployProject(@ModelAttribute ProjectDto dto) throws DeployException {
+        projectService.deployProject(projectMapper.toEntity(dto));
+        return "Деплой проекта запущен";
     }
 
     @PostMapping("/api/updateProject")

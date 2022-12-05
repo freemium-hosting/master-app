@@ -14,5 +14,4 @@ public interface ProjectService {
     Project getProjectDetails(Long projectId);
     List<Project> getAllProjects();
     Project findProjectById(Long projectId);
-    void generateProjectNodePort(Project project);
 }
